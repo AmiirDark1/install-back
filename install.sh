@@ -144,10 +144,27 @@ install_backhaul() {
         read -p "Bind Port: " BIND_PORT
         BIND_PORT=${BIND_PORT:-1000}
         
-        echo -e "${YELLOW}Enter ports to forward (format: LOCAL:REMOTE, comma-separated)${NC}"
-        echo -e "${BLUE}Examples: 443:443,2083:2083,8084:8084 or just 443,2083,8084${NC}"
-        read -p "Ports: " PORTS_INPUT
-        PORTS_INPUT=${PORTS_INPUT:-"443:443,2083:2083,8084:8084"}
+while true; do
+    echo -e "${YELLOW}Enter ports to forward (format: LOCAL:REMOTE, comma-separated)${NC}"
+    echo -e "${BLUE}Examples: 443:443,2083:2083,8084:8084 or just 443,2083,8084${NC}"
+    read -p "Ports: " PORTS_INPUT
+
+    # اگر خالی بود، پیام خطا بده
+    if [ -z "$PORTS_INPUT" ]; then
+        echo -e "${RED}You must enter at least one port!${NC}"
+        continue
+    fi
+
+    # بررسی اینکه فقط اعداد و ":" و "," دارند
+    if [[ ! "$PORTS_INPUT" =~ ^[0-9,:]+$ ]]; then
+        echo -e "${RED}Invalid format! Only numbers, commas, and colons are allowed.${NC}"
+        continue
+    fi
+
+    # اگر همه چیز درست بود، حلقه را بشکن
+    break
+done
+
         
         # Convert ports to TOML format
         PORTS_ARRAY=""
@@ -187,10 +204,50 @@ install_backhaul() {
     cd /opt/backhaul
     
     echo -e "${GREEN}Downloading Backhaul...${NC}"
-    wget -q --show-progress https://github.com/Musixal/Backhaul/releases/download/v0.6.5/backhaul_linux_amd64.tar.gz
-    tar -xzf backhaul_linux_amd64.tar.gz
+    
+    # Remove old file if exists
+    rm -f backhaul_linux_amd64.tar.gz
+    
+    # Download with retry
+    MAX_RETRIES=3
+    RETRY_COUNT=0
+    
+    while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+        if wget --tries=3 --timeout=30 --show-progress https://github.com/Musixal/Backhaul/releases/download/v0.6.5/backhaul_linux_amd64.tar.gz; then
+            echo -e "${GREEN}Download completed successfully!${NC}"
+            break
+        else
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+            if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+                echo -e "${YELLOW}Download failed. Retrying... ($RETRY_COUNT/$MAX_RETRIES)${NC}"
+                rm -f backhaul_linux_amd64.tar.gz
+                sleep 2
+            else
+                echo -e "${RED}Download failed after $MAX_RETRIES attempts!${NC}"
+                echo -e "${RED}Please check your internet connection and try again.${NC}"
+                exit 1
+            fi
+        fi
+    done
+    
+    # Verify downloaded file
+    if [ ! -f "backhaul_linux_amd64.tar.gz" ] || [ ! -s "backhaul_linux_amd64.tar.gz" ]; then
+        echo -e "${RED}Downloaded file is missing or empty!${NC}"
+        exit 1
+    fi
+    
+    echo -e "${GREEN}Extracting files...${NC}"
+    if ! tar -xzf backhaul_linux_amd64.tar.gz; then
+        echo -e "${RED}Failed to extract archive! File might be corrupted.${NC}"
+        echo -e "${YELLOW}Cleaning up and please try again...${NC}"
+        rm -f backhaul_linux_amd64.tar.gz
+        exit 1
+    fi
+    
     chmod +x backhaul
-    rm backhaul_linux_amd64.tar.gz
+    rm -f backhaul_linux_amd64.tar.gz
+    
+    echo -e "${GREEN}Backhaul binary extracted successfully!${NC}"
     
     # Create configuration file
     echo -e "${GREEN}Creating configuration file...${NC}"
