@@ -9,4 +9,5 @@
 برای نصب کافی است دستور زیر را در ترمینال خود اجرا کنید:
 
 ```bash
-bash <(https://raw.githubusercontent.com/AmiirDark1/install-back/refs/heads/main/install.sh)
+bash <(curl -s https://raw.githubusercontent.com/AmiirDark1/install-back/main/install.sh)
+
